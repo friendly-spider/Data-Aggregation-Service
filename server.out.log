@@ -1,0 +1,7 @@
+{"level":30,"time":1763233529675,"pid":24172,"hostname":"desktop","msg":"Server listening at http://127.0.0.1:3000"}
+Server listening on http://127.0.0.1:3000
+{"level":30,"time":1763233529676,"pid":24172,"hostname":"desktop","msg":"Server listening at http://192.168.137.1:3000"}
+{"level":30,"time":1763233529676,"pid":24172,"hostname":"desktop","msg":"Server listening at http://172.16.8.50:3000"}
+{"level":30,"time":1763233529676,"pid":24172,"hostname":"desktop","msg":"Server listening at http://172.27.192.1:3000"}
+{"level":30,"time":1763233533856,"pid":24172,"hostname":"desktop","reqId":"req-1","req":{"method":"GET","url":"/health","host":"localhost:3000","remoteAddress":"127.0.0.1","remotePort":51587},"msg":"incoming request"}
+{"level":30,"time":1763233533863,"pid":24172,"hostname":"desktop","reqId":"req-1","res":{"statusCode":200},"responseTime":6.19539999961853,"msg":"request completed"}
