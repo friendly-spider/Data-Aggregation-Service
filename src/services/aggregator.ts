@@ -2,10 +2,22 @@ import { fetchFromDexScreener, fetchFromJupiter } from '../clients/dexClients';
 import { getCached, setCached } from './cache';
 import { TokenNormalized } from '../types/token';
 
-export async function fetchAndMerge(query: string, ttl = 30) {
+export type SortKey = 'volume' | 'price_change' | 'market_cap' | 'liquidity' | 'tx_count' | 'updated_at';
+export type PeriodKey = '1h' | '24h' | '7d';
+export interface FetchOptions {
+  sort?: SortKey;
+  order?: 'asc' | 'desc';
+  period?: PeriodKey;
+  limit?: number;
+  cursor?: string;
+}
+
+export async function fetchAndMerge(query: string, ttl = 30, opts: FetchOptions = {}) {
   const cacheKey = `tokens:list:${query}`;
   const cached = await getCached<{ items: TokenNormalized[] }>(cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    return paginateAndSort(cached.items, opts);
+  }
 
   const [a, b] = await Promise.allSettled([
     fetchFromDexScreener(query),
@@ -18,11 +30,9 @@ export async function fetchAndMerge(query: string, ttl = 30) {
   if (b.status === 'fulfilled') combined.push(...b.value);
 
   const merged = mergeTokens(combined);
-
-  const result = { items: merged.slice(0, 50) };
-
-  await setCached(cacheKey, result, ttl);
-  return result;
+  const full = { items: merged };
+  await setCached(cacheKey, full, ttl);
+  return paginateAndSort(merged, opts);
 }
 
 function mergeTokens(list: TokenNormalized[]): TokenNormalized[] {
@@ -49,4 +59,64 @@ function mergeTokens(list: TokenNormalized[]): TokenNormalized[] {
   return Array.from(map.values()).sort(
     (a, b) => (b.volume_sol || 0) - (a.volume_sol || 0)
   );
+}
+
+function paginateAndSort(items: TokenNormalized[], opts: FetchOptions) {
+  const sortKey: SortKey = opts.sort || 'volume';
+  const order = opts.order || 'desc';
+  const limit = Math.max(1, Math.min(100, opts.limit ?? 20));
+
+  const sorted = [...items].sort((a, b) => {
+    const av = getSortValue(a, sortKey);
+    const bv = getSortValue(b, sortKey);
+    const cmp = av - bv;
+    return order === 'asc' ? cmp : -cmp;
+  });
+
+  const decodeCursor = (c?: string) => {
+    try {
+      if (!c) return undefined;
+      return JSON.parse(Buffer.from(c, 'base64').toString('utf8')) as { k: string; v: number };
+    } catch {
+      return undefined;
+    }
+  };
+  const encodeCursor = (k: string, v: number) => Buffer.from(JSON.stringify({ k, v }), 'utf8').toString('base64');
+
+  const cur = decodeCursor(opts.cursor);
+  let startIdx = 0;
+  if (cur) {
+    const idx = sorted.findIndex((t) => tokenKey(t) === cur.k);
+    startIdx = idx >= 0 ? idx + 1 : 0;
+  }
+  const page = sorted.slice(startIdx, startIdx + limit);
+  const next = sorted[startIdx + limit];
+
+  return {
+    items: page,
+    nextCursor: next ? encodeCursor(tokenKey(next), getSortValue(next, sortKey)) : undefined
+  };
+}
+
+function tokenKey(t: TokenNormalized) {
+  return `${t.chain}:${t.token_address}`.toLowerCase();
+}
+
+function getSortValue(t: TokenNormalized, key: SortKey): number {
+  switch (key) {
+    case 'volume':
+      return t.volume_sol ?? 0;
+    case 'price_change':
+      return t.price_1hr_change ?? 0;
+    case 'market_cap':
+      return t.market_cap_sol ?? 0;
+    case 'liquidity':
+      return t.liquidity_sol ?? 0;
+    case 'tx_count':
+      return t.transaction_count ?? 0;
+    case 'updated_at':
+      return t.updated_at ?? 0;
+    default:
+      return 0;
+  }
 }
