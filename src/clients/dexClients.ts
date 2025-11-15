@@ -25,13 +25,17 @@ export async function fetchFromDexScreener(q: string): Promise<TokenNormalized[]
       token_address: p.baseToken?.address,
       token_name: p.baseToken?.name,
       token_ticker: p.baseToken?.symbol,
-      // Mapping USD-ish provider fields into *_sol placeholders for now
       price_sol: Number(p.priceUsd) || 0,
-      volume_sol: Number(p.volume?.h24) || 0,
-      liquidity_sol: Number((p.liquidity && (p.liquidity.usd || p.liquidity)) || 0) || 0,
-      market_cap_sol: Number(p.marketCap || p.fdv) || 0,
+      // Period-aware volumes
+      volume_24h: Number(p.volume?.h24) || undefined,
+      // Legacy total volume field retained for compatibility
+      volume_sol: Number(p.volume?.h24) || undefined,
+      // USD-denominated fields
+      liquidity_usd: Number((p.liquidity && (p.liquidity.usd || p.liquidity)) || 0) || undefined,
+      market_cap_usd: Number(p.marketCap || p.fdv) || undefined,
       transaction_count: ((p.txns?.h24?.buys || 0) + (p.txns?.h24?.sells || 0)) || undefined,
       price_1hr_change: (p.priceChange && Number(p.priceChange.h1)) || undefined,
+      price_24h_change: (p.priceChange && Number(p.priceChange.h24)) || undefined,
       protocol: p.dexId,
       updated_at: Date.now()
     }));
@@ -62,10 +66,11 @@ export async function fetchFromJupiter(q: string): Promise<TokenNormalized[]> {
       token_name: t.name,
       token_ticker: t.symbol,
       price_sol: Number(t.usdPrice) || 0,
-      liquidity_sol: Number(t.liquidity) || 0,
-      volume_sol: (t.stats24h?.buyVolume || 0) + (t.stats24h?.sellVolume || 0),
+      liquidity_usd: Number(t.liquidity) || undefined,
+      volume_24h: (t.stats24h?.buyVolume || 0) + (t.stats24h?.sellVolume || 0) || undefined,
+      volume_sol: ((t.stats24h?.buyVolume || 0) + (t.stats24h?.sellVolume || 0)) || undefined,
       transaction_count: undefined,
-      price_1hr_change: (t.stats24h?.priceChange || t.stats24h?.priceChangePercent) ?? undefined,
+      price_24h_change: (t.stats24h?.priceChange || t.stats24h?.priceChangePercent) ?? undefined,
       protocol: undefined,
       updated_at: Date.now()
     }));

@@ -47,17 +47,27 @@ function mergeTokens(list: TokenNormalized[]): TokenNormalized[] {
       continue;
     }
 
+    // Sum period volumes when available
     existing.volume_sol = (existing.volume_sol || 0) + (t.volume_sol || 0);
-    existing.liquidity_sol = Math.max(existing.liquidity_sol || 0, t.liquidity_sol || 0);
+    existing.volume_1h = (existing.volume_1h || 0) + (t.volume_1h || 0);
+    existing.volume_24h = (existing.volume_24h || 0) + (t.volume_24h || 0);
+    existing.volume_7d = (existing.volume_7d || 0) + (t.volume_7d || 0);
+    // Max liquidity, prefer higher USD liquidity snapshot
+    existing.liquidity_usd = Math.max(existing.liquidity_usd || 0, t.liquidity_usd || 0);
+    // Market cap: keep max to avoid double counting across pools
+    existing.market_cap_usd = Math.max(existing.market_cap_usd || 0, t.market_cap_usd || 0);
 
     if ((t.updated_at || 0) > (existing.updated_at || 0)) {
       existing.price_sol = t.price_sol;
+      existing.price_1hr_change = t.price_1hr_change ?? existing.price_1hr_change;
+      existing.price_24h_change = t.price_24h_change ?? existing.price_24h_change;
+      existing.price_7d_change = t.price_7d_change ?? existing.price_7d_change;
       existing.updated_at = t.updated_at;
     }
   }
 
   return Array.from(map.values()).sort(
-    (a, b) => (b.volume_sol || 0) - (a.volume_sol || 0)
+    (a, b) => (b.volume_24h || b.volume_sol || 0) - (a.volume_24h || a.volume_sol || 0)
   );
 }
 
@@ -105,13 +115,18 @@ function tokenKey(t: TokenNormalized) {
 function getSortValue(t: TokenNormalized, key: SortKey): number {
   switch (key) {
     case 'volume':
-      return t.volume_sol ?? 0;
+      // Use period-aware volumes; fall back to 24h then legacy total
+      return (
+        t.volume_1h ?? t.volume_24h ?? t.volume_7d ?? t.volume_sol ?? 0
+      );
     case 'price_change':
-      return t.price_1hr_change ?? 0;
+      return (
+        t.price_1hr_change ?? t.price_24h_change ?? t.price_7d_change ?? 0
+      );
     case 'market_cap':
-      return t.market_cap_sol ?? 0;
+      return t.market_cap_usd ?? 0;
     case 'liquidity':
-      return t.liquidity_sol ?? 0;
+      return t.liquidity_usd ?? 0;
     case 'tx_count':
       return t.transaction_count ?? 0;
     case 'updated_at':

@@ -61,7 +61,7 @@ Copy `.env.example` to `.env` and adjust as needed.
 		 - `order` = `asc | desc` (default `desc`)
 		 - `limit` = number (1..100, default 20)
 		 - `cursor` = opaque string for pagination (returned as `nextCursor`)
-		 - `period` = `1h | 24h | 7d` (placeholder; currently `price_change` uses 1h if available)
+		 - `period` = `1h | 24h | 7d` (affects `volume` and `price_change` sort keys)
 
 ## Data Schema
 Normalized token shape returned by the API (fields optional depending on source coverage):
@@ -73,11 +73,12 @@ Normalized token shape returned by the API (fields optional depending on source 
 	"token_name": "PIPE CTO",
 	"token_ticker": "PIPE",
 	"price_sol": 4.4141209798877615e-7,
-	"market_cap_sol": 441.41209798877617,
-	"volume_sol": 1322.4350391679925,
-	"liquidity_sol": 149.359428555,
+	"market_cap_usd": 441.41,
+	"volume_24h": 1322.44,
+	"liquidity_usd": 149.36,
 	"transaction_count": 2205,
 	"price_1hr_change": 120.61,
+	"price_24h_change": 15.2,
 	"protocol": "Raydium CLMM",
 	"updated_at": 1731715200000
 }
