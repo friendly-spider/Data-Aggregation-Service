@@ -1,10 +1,18 @@
 import { http } from '../lib/http';
 import { TokenNormalized } from '../types/token';
+import { tryAcquire } from '../lib/rateLimiter';
 
 export async function fetchFromDexScreener(q: string): Promise<TokenNormalized[]> {
   const url = `https://api.dexscreener.com/latest/dex/search?q=${encodeURIComponent(q)}`;
 
   try {
+    const allowed = await tryAcquire('dexscreener', 100, 60);
+    if (!allowed) {
+      // Rate-limited: skip immediate call (a scheduler can requeue)
+      // eslint-disable-next-line no-console
+      console.warn('Rate limited: dexscreener');
+      return [];
+    }
     const res: any = await http.get(url).json();
     const pairs = res?.pairs || [];
 
@@ -29,6 +37,12 @@ export async function fetchFromJupiter(q: string): Promise<TokenNormalized[]> {
   const url = `https://lite-api.jup.ag/tokens/v2/search?query=${encodeURIComponent(q)}`;
 
   try {
+    const allowed = await tryAcquire('jupiter', 100, 60);
+    if (!allowed) {
+      // eslint-disable-next-line no-console
+      console.warn('Rate limited: jupiter');
+      return [];
+    }
     const res: any = await http.get(url).json();
 
     return res.map((t: any) => ({

@@ -82,6 +82,20 @@ ws.on('message', (m) => console.log('msg', m.toString()));
  - WebSocket broadcaster via `src/services/ws-broadcaster.ts` bridged to Redis Pub/Sub.
  - Snapshot publisher via `src/services/publisher.ts`.
 
+## Worker
+Run a dedicated worker process for BullMQ jobs:
+
+```bat
+npm run build
+npm run worker
+```
+
+Dev mode:
+
+```bat
+npm run worker:dev
+```
+
 ## Manual publisher trigger
 
 - Via HTTP:
@@ -96,3 +110,8 @@ curl -X POST "http://localhost:3000/api/publish?q=sol"
 npm run build
 node -e "require('./dist/services/publisher').publishSnapshotForQuery('sol')"
 ```
+
+## Rate limiting
+- Utility: `src/lib/rateLimiter.ts` (Redis token-bucket via Lua).
+- Providers call `tryAcquire('dexscreener'|'jupiter')` before outbound requests. If denied, they skip calling immediately.
+- For retries, enqueue with BullMQ (e.g., using `scheduleRefresh`) from an API handler or a separate supervisor process to avoid circular imports in modules.
