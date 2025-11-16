@@ -15,7 +15,7 @@ describe('coingecko headers', () => {
     process.env.COINGECKO_API_KEY = 'test-key';
   });
 
-  it('sends x-cg-api-key header on both requests', async () => {
+  it('sends x-cg-demo-api-key header on both requests', async () => {
     // First call: search
     hoisted.getMock.mockImplementationOnce((_url: string, opts?: any) => ({ json: async () => ({ coins: [{ id: 'bitcoin' }] }) }));
     // Second call: markets
@@ -27,7 +27,7 @@ describe('coingecko headers', () => {
     const calls = hoisted.getMock.mock.calls;
     expect(calls.length).toBe(2);
     calls.forEach(([, opts]) => {
-      expect(opts?.headers?.['x-cg-api-key']).toBe('test-key');
+      expect(opts?.headers?.['x-cg-demo-api-key']).toBe('test-key');
     });
   });
 });

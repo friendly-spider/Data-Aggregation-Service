@@ -1,0 +1,178 @@
+{
+	"info": {
+		"_postman_id": "541fb6f7-3c4b-4642-bd51-0b5af79f2ae3",
+		"name": "Real-Time Token Aggregator",
+		"description": "Postman collection for Fastify real-time token aggregation service.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "48084398",
+		"_collection_link": "https://friendlyspider-9189475.postman.co/workspace/FriendlySpider's-Workspace~f14e6697-6f62-441d-8e40-abdaba3bb4dd/collection/48084398-541fb6f7-3c4b-4642-bd51-0b5af79f2ae3?action=share&source=collection_link&creator=48084398"
+	},
+	"item": [
+		{
+			"name": "Tokens API",
+			"item": [
+				{
+					"name": "GET /api/tokens — basic search",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status is 200\", function () {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Contains items array\", function () {",
+									"  const json = pm.response.json();",
+									"  pm.expect(json.items).to.be.an('array');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tokens?q=sol",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tokens"
+							],
+							"query": [
+								{
+									"key": "q",
+									"value": "sol"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET /api/tokens — with limit & sort",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tokens?q=sol&limit=10&sort=liquidity&order=desc",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tokens"
+							],
+							"query": [
+								{
+									"key": "q",
+									"value": "sol"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								},
+								{
+									"key": "sort",
+									"value": "liquidity"
+								},
+								{
+									"key": "order",
+									"value": "desc"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET /api/tokens — with cursor pagination",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/tokens?q=sol&cursor={{cursor}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tokens"
+							],
+							"query": [
+								{
+									"key": "q",
+									"value": "sol"
+								},
+								{
+									"key": "cursor",
+									"value": "{{cursor}}"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Static Frontend",
+			"item": [
+				{
+					"name": "GET /index.html",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/index.html",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"index.html"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Health Check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/health",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"health"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3000"
+		},
+		{
+			"key": "cursor",
+			"value": ""
+		},
+		{
+			"key": "GECKO_API_KEY",
+			"value": "your-api-key-here"
+		}
+	]
+}

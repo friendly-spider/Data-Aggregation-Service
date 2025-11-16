@@ -19,4 +19,9 @@ export type TokenNormalized = {
   price_7d_change?: number;
   protocol?: string;
   updated_at?: number;
+  // Normalized metrics for cross-provider consistency
+  norm_volume_24h?: number;        // unified 24h volume
+  liquidity_dex?: number;          // liquidity from DEX sources
+  market_cap_cg?: number;          // market cap from CoinGecko
+  market_cap_dex?: number;         // market cap from DEX sources
 };
