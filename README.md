@@ -2,6 +2,8 @@
 
 Fast, real-time token aggregation with Fastify, Redis, and WebSockets. Merges data from DexScreener, Jupiter, and CoinGecko into a normalized model, serves a REST API for initial load, and streams live updates over WS.
 
+Hosted at: https://data-aggregation-service-1kxm.onrender.com/
+
 ## Quick Start
 
 1) Install dependencies
