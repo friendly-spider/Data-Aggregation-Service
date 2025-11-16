@@ -139,6 +139,19 @@ node -e "require('./dist/services/publisher').publishSnapshotForQuery('sol')"
 ```
 
 ## Rate limiting
+## Frontend demo
+After starting API and worker, open the demo UI:
+
+```bat
+start http://localhost:3000/
+```
+
+The UI lets you:
+- Load aggregated tokens with query, period, sort, order, and limit
+- Paginate with "Load More" (uses `nextCursor`)
+- Connect to WebSocket (filtered by `q`) and see snapshot + delta updates
+- Trigger a manual snapshot publish for the current query
+
 - Utility: `src/lib/rateLimiter.ts` (Redis token-bucket via Lua).
 - Providers call `tryAcquire('dexscreener'|'jupiter')` before outbound requests. If denied, they skip calling immediately.
 - For retries, enqueue with BullMQ (e.g., using `scheduleRefresh`) from an API handler or a separate supervisor process to avoid circular imports in modules.

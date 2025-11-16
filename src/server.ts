@@ -1,9 +1,11 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
+import path from 'path';
 import WebSocket from 'ws';
 import { fetchAndMerge, type FetchOptions } from './services/aggregator';
-import { setupWsPubSub } from './services/ws-broadcaster';
+import { setupWsPubSub, getActiveQueries } from './services/ws-broadcaster';
 import { redis } from './services/cache';
 import { publishSnapshotForQuery } from './services/publisher';
 
@@ -11,6 +13,17 @@ const fastify = Fastify({ logger: false });
 
 async function buildServer() {
   await fastify.register(cors, { origin: true });
+  await fastify.register(fastifyStatic, {
+    root: path.join(__dirname, '../public'),
+    prefix: '/',
+    index: 'index.html'
+  });
+
+  // Explicit route for index to avoid any prefix ambiguity
+  fastify.get('/', async (_req, reply) => {
+    // @ts-ignore - sendFile is added by @fastify/static
+    return reply.type('text/html').sendFile('index.html');
+  });
 
   fastify.get('/health', async () => ({ status: 'ok' }));
 
@@ -27,11 +40,7 @@ async function buildServer() {
     return data;
   });
 
-  fastify.post('/api/publish', async (request) => {
-    const q = ((request.query as any).q as string) || 'sol';
-    await publishSnapshotForQuery(q);
-    return { ok: true };
-  });
+  // Removed /api/publish as updates are pushed automatically over WS
 
   const wss = new WebSocket.Server({
     server: fastify.server,   
@@ -43,6 +52,19 @@ async function buildServer() {
   const port = Number(process.env.PORT) || 3000;
 
   await fastify.listen({ port, host: '0.0.0.0' });
+
+  // Periodically publish updates for active queries seen on WS connections
+  const intervalMs = Number(process.env.PUBLISH_INTERVAL_MS || 15000);
+  setInterval(async () => {
+    try {
+      const actives = Array.from(getActiveQueries());
+      for (const q of actives) {
+        await publishSnapshotForQuery(q);
+      }
+    } catch (e) {
+      console.error('auto-publish error', e);
+    }
+  }, intervalMs);
 
   console.log(`Server listening on http://localhost:${port}`);
 }

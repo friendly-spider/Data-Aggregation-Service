@@ -27,12 +27,17 @@ export async function fetchFromDexScreener(q: string): Promise<TokenNormalized[]
       token_ticker: p.baseToken?.symbol,
       price_sol: Number(p.priceUsd) || 0,
       // Period-aware volumes
+      volume_1h: Number(p.volume?.h1) || undefined,
       volume_24h: Number(p.volume?.h24) || undefined,
+      volume_7d: undefined,
       // Legacy total volume field retained for compatibility
       volume_sol: Number(p.volume?.h24) || undefined,
       // USD-denominated fields
       liquidity_usd: Number((p.liquidity && (p.liquidity.usd || p.liquidity)) || 0) || undefined,
       market_cap_usd: Number(p.marketCap || p.fdv) || undefined,
+      transaction_count_1h: ((p.txns?.h1?.buys || 0) + (p.txns?.h1?.sells || 0)) || undefined,
+      transaction_count_24h: ((p.txns?.h24?.buys || 0) + (p.txns?.h24?.sells || 0)) || undefined,
+      transaction_count_7d: undefined,
       transaction_count: ((p.txns?.h24?.buys || 0) + (p.txns?.h24?.sells || 0)) || undefined,
       price_1hr_change: (p.priceChange && Number(p.priceChange.h1)) || undefined,
       price_24h_change: (p.priceChange && Number(p.priceChange.h24)) || undefined,
@@ -69,6 +74,9 @@ export async function fetchFromJupiter(q: string): Promise<TokenNormalized[]> {
       liquidity_usd: Number(t.liquidity) || undefined,
       volume_24h: (t.stats24h?.buyVolume || 0) + (t.stats24h?.sellVolume || 0) || undefined,
       volume_sol: ((t.stats24h?.buyVolume || 0) + (t.stats24h?.sellVolume || 0)) || undefined,
+      transaction_count_1h: undefined,
+      transaction_count_24h: undefined,
+      transaction_count_7d: undefined,
       transaction_count: undefined,
       price_24h_change: (t.stats24h?.priceChange || t.stats24h?.priceChangePercent) ?? undefined,
       protocol: undefined,
