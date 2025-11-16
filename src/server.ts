@@ -8,6 +8,8 @@ import { fetchAndMerge, type FetchOptions } from './services/aggregator';
 import { setupWsPubSub, getActiveQueries } from './services/ws-broadcaster';
 import { redis } from './services/cache';
 import { publishSnapshotForQuery } from './services/publisher';
+import { startWorker } from './queues/refreshQueue';
+import { startRateLimitBridge } from './queues/scheduler';
 
 const fastify = Fastify({ logger: false });
 
@@ -60,7 +62,7 @@ async function buildServer() {
 
   // Periodically publish updates for active queries seen on WS connections
   const intervalMs = Number(process.env.PUBLISH_INTERVAL_MS || 15000);
-  setInterval(async () => {
+  const autoTimer = setInterval(async () => {
     try {
       const actives = Array.from(getActiveQueries());
       for (const q of actives) {
@@ -70,6 +72,31 @@ async function buildServer() {
       console.error('auto-publish error', e);
     }
   }, intervalMs);
+
+  // Optionally run BullMQ worker and rate-limit bridge in the same process
+  const runWorker = String(process.env.RUN_WORKER || 'true').toLowerCase() !== 'false';
+  const resources: { worker?: any; bridge?: { sub: any; ctrl: any } } = {};
+  if (runWorker) {
+    try {
+      resources.worker = startWorker();
+      resources.bridge = startRateLimitBridge();
+      console.log('Worker and rate-limit bridge started in API process');
+    } catch (e) {
+      console.error('Failed to start embedded worker/bridge', e);
+    }
+  }
+
+  async function shutdown() {
+    try { clearInterval(autoTimer); } catch {}
+    try { await fastify.close(); } catch {}
+    try { if (resources.worker) await resources.worker.close(); } catch {}
+    try { if (resources.bridge?.sub) await resources.bridge.sub.quit(); } catch {}
+    try { if (resources.bridge?.ctrl) await resources.bridge.ctrl.quit(); } catch {}
+    try { await redis.quit(); } catch {}
+    process.exit(0);
+  }
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 
   console.log(`Server listening on http://localhost:${port}`);
 }

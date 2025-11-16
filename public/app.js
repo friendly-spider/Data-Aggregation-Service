@@ -14,6 +14,7 @@
   let ws;
   const rows = new Map(); // key -> tr
   const allTokens = new Map(); // key -> full token object
+  const liveState = new Map(); // key -> { basePrice: number, lastPrice: number, livePct: number }
 
   function tokenKey(t){ return `${t.chain}:${t.token_address}`.toLowerCase(); }
   function shortAddr(a){ return a ? a.slice(0,4)+"…"+a.slice(-4) : ''; }
@@ -103,6 +104,16 @@
     const liqUSD = t.liquidity_usd;
     const mcUSD = t.market_cap_usd;
     const priceDelta = (periodEl.value === '1h' ? t.price_1hr_change : periodEl.value === '24h' ? t.price_24h_change : t.price_7d_change);
+    // Update live state baseline/percent
+    if (t.price_sol != null) {
+      const st = liveState.get(key) || { basePrice: undefined, lastPrice: undefined, livePct: undefined };
+      if (st.basePrice == null || st.basePrice === 0) st.basePrice = Number(t.price_sol) || 0;
+      st.lastPrice = Number(t.price_sol) || st.lastPrice;
+      if (st.basePrice && st.lastPrice != null) {
+        st.livePct = ((st.lastPrice - st.basePrice) / Math.abs(st.basePrice)) * 100;
+      }
+      liveState.set(key, st);
+    }
     if(!tr){
       tr = document.createElement('tr');
       tr.innerHTML = `
@@ -115,7 +126,8 @@
         <td class="liq"></td>
         <td class="mc"></td>
         <td class="tx"></td>
-        <td class="delta"></td>`;
+        <td class="delta"></td>
+        <td class="live"></td>`;
       rows.set(key, tr);
       tbody.appendChild(tr);
     }
@@ -129,6 +141,15 @@
     tr.querySelector('.mc').textContent = fmt(mcUSD);
     tr.querySelector('.tx').textContent = fmt(t.transaction_count,0);
     tr.querySelector('.delta').textContent = priceDelta!=null ? fmt(priceDelta,2)+'%' : '';
+    const st = liveState.get(key);
+    const liveEl = tr.querySelector('.live');
+    if (st && typeof st.livePct === 'number' && isFinite(st.livePct)) {
+      liveEl.textContent = `${fmt(st.livePct,2)}%`;
+      liveEl.style.color = st.livePct > 0 ? '#0a0' : (st.livePct < 0 ? '#c00' : '');
+    } else {
+      liveEl.textContent = '';
+      liveEl.style.color = '';
+    }
     tr.classList.add('highlight');
     setTimeout(()=>tr.classList.remove('highlight'), 600);
   }
@@ -149,6 +170,7 @@
     ws.addEventListener('message', (ev)=>{
       try{
         const payload = JSON.parse(ev.data);
+        status(`WS @ ${new Date().toLocaleTimeString()}`);
         if(payload?.type === 'snapshot'){
           if(Array.isArray(payload.data)){
             // Compact snapshot form
