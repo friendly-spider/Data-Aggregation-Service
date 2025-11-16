@@ -1,4 +1,5 @@
 import { fetchFromDexScreener, fetchFromJupiter } from '../clients/dexClients';
+import { fetchFromCoinGecko } from '../clients/gecko';
 import { getCached, setCached } from './cache';
 import { TokenNormalized } from '../types/token';
 
@@ -19,15 +20,17 @@ export async function fetchAndMerge(query: string, ttl = 30, opts: FetchOptions 
     return paginateAndSort(cached.items, opts);
   }
 
-  const [a, b] = await Promise.allSettled([
+  const [a, b, c] = await Promise.allSettled([
     fetchFromDexScreener(query),
-    fetchFromJupiter(query)
+    fetchFromJupiter(query),
+    fetchFromCoinGecko(query)
   ]);
 
   const combined: TokenNormalized[] = [];
 
   if (a.status === 'fulfilled') combined.push(...a.value);
   if (b.status === 'fulfilled') combined.push(...b.value);
+  if (c.status === 'fulfilled') combined.push(...c.value);
 
   const merged = mergeTokens(combined);
   const full = { items: merged };
@@ -52,14 +55,6 @@ function mergeTokens(list: TokenNormalized[]): TokenNormalized[] {
     existing.volume_1h = (existing.volume_1h || 0) + (t.volume_1h || 0);
     existing.volume_24h = (existing.volume_24h || 0) + (t.volume_24h || 0);
     existing.volume_7d = (existing.volume_7d || 0) + (t.volume_7d || 0);
-    // Sum period tx counts
-    existing.transaction_count_1h = (existing.transaction_count_1h || 0) + (t.transaction_count_1h || 0);
-    existing.transaction_count_24h = (existing.transaction_count_24h || 0) + (t.transaction_count_24h || 0);
-    existing.transaction_count_7d = (existing.transaction_count_7d || 0) + (t.transaction_count_7d || 0);
-    // Legacy tx count defaults to 24h when available
-    const tx24 = (existing.transaction_count_24h || 0);
-    const txLegacy = (existing.transaction_count || 0) + (t.transaction_count || 0);
-    existing.transaction_count = tx24 || txLegacy || undefined;
     // Max liquidity, prefer higher USD liquidity snapshot
     existing.liquidity_usd = Math.max(existing.liquidity_usd || 0, t.liquidity_usd || 0);
     // Market cap: keep max to avoid double counting across pools
@@ -85,8 +80,8 @@ function paginateAndSort(items: TokenNormalized[], opts: FetchOptions) {
   const limit = Math.max(1, Math.min(100, opts.limit ?? 20));
 
   const sorted = [...items].sort((a, b) => {
-    const av = getSortValue(a, sortKey, opts.period);
-    const bv = getSortValue(b, sortKey, opts.period);
+    const av = getSortValue(a, sortKey);
+    const bv = getSortValue(b, sortKey);
     const cmp = av - bv;
     return order === 'asc' ? cmp : -cmp;
   });
@@ -112,7 +107,7 @@ function paginateAndSort(items: TokenNormalized[], opts: FetchOptions) {
 
   return {
     items: page,
-    nextCursor: next ? encodeCursor(tokenKey(next), getSortValue(next, sortKey, opts.period)) : undefined
+    nextCursor: next ? encodeCursor(tokenKey(next), getSortValue(next, sortKey)) : undefined
   };
 }
 
@@ -120,25 +115,23 @@ function tokenKey(t: TokenNormalized) {
   return `${t.chain}:${t.token_address}`.toLowerCase();
 }
 
-function getSortValue(t: TokenNormalized, key: SortKey, period?: PeriodKey): number {
+function getSortValue(t: TokenNormalized, key: SortKey): number {
   switch (key) {
     case 'volume':
-      // Use requested period volumes; fallbacks
-      if (period === '1h') return t.volume_1h ?? 0;
-      if (period === '7d') return t.volume_7d ?? (t.volume_24h ?? 0);
-      return t.volume_24h ?? t.volume_sol ?? 0;
+      // Use period-aware volumes; fall back to 24h then legacy total
+      return (
+        t.volume_1h ?? t.volume_24h ?? t.volume_7d ?? t.volume_sol ?? 0
+      );
     case 'price_change':
-      if (period === '1h') return t.price_1hr_change ?? 0;
-      if (period === '7d') return t.price_7d_change ?? (t.price_24h_change ?? 0);
-      return t.price_24h_change ?? 0;
+      return (
+        t.price_1hr_change ?? t.price_24h_change ?? t.price_7d_change ?? 0
+      );
     case 'market_cap':
       return t.market_cap_usd ?? 0;
     case 'liquidity':
       return t.liquidity_usd ?? 0;
     case 'tx_count':
-      if (period === '1h') return t.transaction_count_1h ?? (t.transaction_count ?? 0);
-      if (period === '7d') return t.transaction_count_7d ?? (t.transaction_count ?? 0);
-      return t.transaction_count_24h ?? (t.transaction_count ?? 0);
+      return t.transaction_count ?? 0;
     case 'updated_at':
       return t.updated_at ?? 0;
     default:

@@ -11,12 +11,6 @@ export async function publishSnapshotForQuery(query: string) {
     address: t.token_address,
     price_sol: t.price_sol || 0,
     volume_sol: t.volume_sol || 0,
-    volume_1h: t.volume_1h,
-    volume_24h: t.volume_24h,
-    volume_7d: t.volume_7d,
-    tx_1h: t.transaction_count_1h,
-    tx_24h: t.transaction_count_24h,
-    tx_7d: t.transaction_count_7d,
     updated_at: t.updated_at || Date.now()
   }));
 

@@ -99,14 +99,10 @@
   function upsertRow(t){
     const key = tokenKey(t);
     let tr = rows.get(key);
-    const period = periodEl.value;
-    const vol = period === '1h' ? (t.volume_1h ?? 0) : period === '7d' ? (t.volume_7d ?? 0) : ((t.volume_24h ?? t.volume_sol) ?? 0);
+    const vol24 = t.volume_24h ?? t.volume_sol;
     const liqUSD = t.liquidity_usd;
     const mcUSD = t.market_cap_usd;
     const priceDelta = (periodEl.value === '1h' ? t.price_1hr_change : periodEl.value === '24h' ? t.price_24h_change : t.price_7d_change);
-    const tx = period === '1h' ? (t.transaction_count_1h ?? t.transaction_count ?? 0)
-      : period === '7d' ? (t.transaction_count_7d ?? t.transaction_count ?? 0)
-      : (t.transaction_count_24h ?? t.transaction_count ?? 0);
     if(!tr){
       tr = document.createElement('tr');
       tr.innerHTML = `
@@ -128,10 +124,10 @@
     tr.querySelector('.chain').textContent = t.chain || '';
     tr.querySelector('.address').textContent = shortAddr(t.token_address);
     tr.querySelector('.price').textContent = fmt(t.price_sol, 8);
-    tr.querySelector('.vol24').textContent = fmt(vol);
+    tr.querySelector('.vol24').textContent = fmt(vol24);
     tr.querySelector('.liq').textContent = fmt(liqUSD);
     tr.querySelector('.mc').textContent = fmt(mcUSD);
-    tr.querySelector('.tx').textContent = fmt(tx,0);
+    tr.querySelector('.tx').textContent = fmt(t.transaction_count,0);
     tr.querySelector('.delta').textContent = priceDelta!=null ? fmt(priceDelta,2)+'%' : '';
     tr.classList.add('highlight');
     setTimeout(()=>tr.classList.remove('highlight'), 600);
@@ -156,19 +152,7 @@
         if(payload?.type === 'snapshot'){
           if(Array.isArray(payload.data)){
             // Compact snapshot form
-            const toIngest = payload.data.map((s)=>({
-              chain:s.chain,
-              token_address:s.address,
-              price_sol:s.price_sol,
-              volume_sol:s.volume_sol,
-              volume_1h:s.volume_1h,
-              volume_24h:s.volume_24h ?? s.volume_sol,
-              volume_7d:s.volume_7d,
-              transaction_count_1h:s.tx_1h,
-              transaction_count_24h:s.tx_24h,
-              transaction_count_7d:s.tx_7d,
-              updated_at:s.updated_at
-            }));
+            const toIngest = payload.data.map((s)=>({ chain:s.chain, token_address:s.address, price_sol:s.price_sol, volume_24h:s.volume_sol, updated_at:s.updated_at }));
             ingest(toIngest);
             renderCurrentView();
           }
@@ -176,18 +160,7 @@
           const s = payload.data;
           const key = tokenKey({ chain:s.chain, token_address:s.address });
           const prev = allTokens.get(key) || { chain:s.chain, token_address:s.address };
-          const next = {
-            ...prev,
-            price_sol:s.price_sol,
-            volume_sol:s.volume_sol,
-            volume_1h:s.volume_1h ?? prev.volume_1h,
-            volume_24h:(s.volume_24h ?? s.volume_sol) ?? prev.volume_24h,
-            volume_7d:s.volume_7d ?? prev.volume_7d,
-            transaction_count_1h:s.tx_1h ?? prev.transaction_count_1h,
-            transaction_count_24h:s.tx_24h ?? prev.transaction_count_24h,
-            transaction_count_7d:s.tx_7d ?? prev.transaction_count_7d,
-            updated_at:s.updated_at
-          };
+          const next = { ...prev, price_sol:s.price_sol, volume_24h:s.volume_sol, updated_at:s.updated_at };
           allTokens.set(key, next);
           // If currently displayed, update row; otherwise ignore until next re-render
           if(rows.has(key)) upsertRow(next);

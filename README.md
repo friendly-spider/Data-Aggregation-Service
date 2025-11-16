@@ -1,6 +1,6 @@
-# Project Backend (Node.js + TypeScript)
+# Data Aggregation Service (Node.js + TypeScript)
 
-A minimal Fastify server written in TypeScript with a health endpoint.
+Fast, real-time token aggregation with Fastify, Redis, and WebSockets. Merges data from DexScreener, Jupiter, and CoinGecko into a normalized model, serves a REST API for initial load, and streams live updates over WS.
 
 ## Quick Start
 
@@ -42,16 +42,24 @@ Run Redis via Docker:
 docker run -p 6379:6379 --name rtd-redis -d redis:7
 ```
 
-Set the environment variable (copy `.env.example` to `.env`):
-
-```env
-REDIS_URL=redis://127.0.0.1:6379
-```
+Set environment variables using `.env` (already supported via `dotenv`). See below.
 
 ## Configuration
 
-Copy `.env.example` to `.env` and adjust as needed.
-- `PORT`: Port to run the server (default 3000)
+Create `.env` at the project root and adjust as needed:
+
+```env
+PORT=3000
+REDIS_URL=redis://127.0.0.1:6379
+# CoinGecko API key header (https://docs.coingecko.com/docs/setting-up-your-api-key)
+COINGECKO_API_KEY=your-key-here
+# Interval for automatic WS updates based on active queries (ms)
+PUBLISH_INTERVAL_MS=15000
+```
+
+Notes:
+- `.gitignore` excludes `.env`.
+- You can also set `CG_API_KEY` instead of `COINGECKO_API_KEY`.
 
 ## Endpoints
 - `GET /health` → `{ "status": "ok" }`
@@ -86,28 +94,35 @@ Normalized token shape returned by the API (fields optional depending on source 
 
 ## WebSocket
 - Path: `ws://localhost:3000/ws`
-- Broadcasts messages published to Redis channel `tokens:updates`.
-- Example publish:
-
-```bat
-docker exec -it rtd-redis redis-cli PUBLISH tokens:updates "{\"type\":\"token_update\",\"q\":\"sol\"}"
-```
+- Server forwards messages from Redis Pub/Sub channel `tokens:updates` to connected clients.
+- Filtering: Clients can set/query filters so they only receive relevant updates.
 
 Client snippet (Node):
 
 ```js
 const WebSocket = require('ws');
 const ws = new WebSocket('ws://localhost:3000/ws');
+ws.on('open', () => {
+	ws.send(JSON.stringify({ type: 'setFilter', q: 'sol', period: '24h' }));
+});
 ws.on('message', (m) => console.log('msg', m.toString()));
 ```
+
+Message types:
+- `snapshot`: compact bulk snapshot for a query
+- `delta`: per-token updates (price changes, volume spikes)
+
+Automatic updates:
+- The server periodically publishes snapshots/deltas for the set of active WS queries every `PUBLISH_INTERVAL_MS`. 
 
 ## Notes
 - Uses `dotenv` to load environment variables.
 - Uses `ts-node-dev` for fast development reloads.
- - Includes a `got`-based HTTP client in `src/lib/http.ts` with retry/backoff.
- - Aggregation and caching via `src/services/aggregator.ts` and `src/services/cache.ts`.
- - WebSocket broadcaster via `src/services/ws-broadcaster.ts` bridged to Redis Pub/Sub.
- - Snapshot publisher via `src/services/publisher.ts`.
+ - `got`-based HTTP client: `src/lib/http.ts` (retry/backoff with jitter).
+ - Aggregation & cache: `src/services/aggregator.ts`, `src/services/cache.ts`.
+ - WS broadcaster + filters: `src/services/ws-broadcaster.ts`.
+ - Snapshot/deltas: `src/services/publisher.ts`.
+ - Data providers: `src/clients/dexClients.ts`, `src/clients/gecko.ts`.
 
 ## Worker
 Run a dedicated worker process for BullMQ jobs:
@@ -123,22 +138,11 @@ Dev mode:
 npm run worker:dev
 ```
 
-## Manual publisher trigger
-
-- Via HTTP:
-
-```bat
-curl -X POST "http://localhost:3000/api/publish?q=sol"
-```
-
-- Via Node REPL (after build):
-
-```bat
-npm run build
-node -e "require('./dist/services/publisher').publishSnapshotForQuery('sol')"
-```
-
 ## Rate limiting
+
+- Utility: `src/lib/rateLimiter.ts` (Redis token-bucket via Lua).
+- Providers call `tryAcquire('dexscreener'|'jupiter'|'coingecko')` before outbound requests. If denied, they skip immediate calls and publish to `rate_limit:requests`; a bridge re-enqueues refresh with backoff.
+
 ## Frontend demo
 After starting API and worker, open the demo UI:
 
@@ -150,8 +154,22 @@ The UI lets you:
 - Load aggregated tokens with query, period, sort, order, and limit
 - Paginate with "Load More" (uses `nextCursor`)
 - Connect to WebSocket (filtered by `q`) and see snapshot + delta updates
-- Trigger a manual snapshot publish for the current query
 
-- Utility: `src/lib/rateLimiter.ts` (Redis token-bucket via Lua).
-- Providers call `tryAcquire('dexscreener'|'jupiter')` before outbound requests. If denied, they skip calling immediately.
-- For retries, enqueue with BullMQ (e.g., using `scheduleRefresh`) from an API handler or a separate supervisor process to avoid circular imports in modules.
+Filtering after initial load happens locally (no additional HTTP calls). The client also sends WS `setFilter` messages so the server only streams relevant deltas.
+
+## Data Sources
+- DexScreener: pairs, volumes (1h/24h), price change, liquidity
+- Jupiter: token info, 24h stats (buy/sell volume), USD price
+- CoinGecko: markets (USD price, market cap, total volume, price change 1h/24h/7d)
+
+
+## Concise Design Decisions
+- Fastify over Express: higher throughput, plugin architecture, typed schema, structured logging.
+- Native `ws` over Socket.IO: lower overhead, easy Redis Pub/Sub integration, full control over payloads.
+- Redis as a central layer: cache, rate limits, pub/sub, BullMQ storage; enables horizontal scale.
+- `got` HTTP client: retries, exponential backoff with jitter; resilient to upstream blips.
+- BullMQ for jobs: retries/backoff/concurrency; decouples workers from API.
+- Pub/Sub separation: workers produce, API delivers; consistent broadcasts across instances.
+- Normalized merge model: merge by `(chain, token_address)`, sum volumes, max liquidity/market cap, freshest price.
+- Cursor pagination: stable ordering under live updates.
+- Delta-first WS: efficient payloads and better UI responsiveness.
