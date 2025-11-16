@@ -40,7 +40,12 @@ async function buildServer() {
     return data;
   });
 
-  // Removed /api/publish as updates are pushed automatically over WS
+  // Manual WS trigger endpoint (for testing/dev)
+  fastify.post('/api/trigger', async (request) => {
+    const q = ((request.query as any).q as string) || 'sol';
+    await publishSnapshotForQuery(q);
+    return { ok: true };
+  });
 
   const wss = new WebSocket.Server({
     server: fastify.server,   
